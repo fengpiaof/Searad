@@ -171,14 +171,15 @@ async def login_with_playwright(username, password):
                     print(f"  ✗ 检查2: 未发现登录后的内容")
                     success_checks.append(False)
                 
-                # 检查3：检查页面是否包含错误信息
-                error_keywords = ["invalid", "incorrect", "error", "failed", "unauthorized", "403", "404"]
+                # 检查3：检查页面是否包含登录失败的错误信息
+                # 只检查更严格的错误关键词
+                error_keywords = ["login failed", "invalid credentials", "incorrect password", "unauthorized", "403", "404 not found"]
                 has_error = any(keyword in content.lower() for keyword in error_keywords)
                 if has_error:
-                    print(f"  ✗ 检查3: 页面包含错误信息")
+                    print(f"  ✗ 检查3: 页面包含登录失败错误信息")
                     success_checks.append(False)
                 else:
-                    print(f"  ✓ 检查3: 页面无错误信息")
+                    print(f"  ✓ 检查3: 页面无登录失败错误")
                     success_checks.append(True)
                 
                 # 检查4：保存页面截图用于调试
@@ -215,6 +216,45 @@ async def login_with_playwright(username, password):
         print(f"❌ 登录出错: {str(e)}")
         return False
 
+def send_telegram_notification(title, message, success_count, fail_count):
+    """发送 Telegram 通知"""
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    
+    if not bot_token or not chat_id:
+        print("⚠️  未配置 Telegram 通知信息")
+        return
+    
+    try:
+        status = "✅ 成功" if fail_count == 0 else "⚠️ 部分失败"
+        text = f"""
+{title}
+
+{message}
+
+📊 统计信息:
+- 成功: {success_count}
+- 失败: {fail_count}
+- 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+状态: {status}
+"""
+        
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        data = {
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML"
+        }
+        
+        response = requests.post(url, data=data, timeout=10)
+        if response.status_code == 200:
+            print("✅ Telegram 通知已发送")
+        else:
+            print(f"❌ Telegram 通知发送失败: {response.status_code}")
+    except Exception as e:
+        print(f"❌ 发送 Telegram 通知出错: {str(e)}")
+
 async def main():
     print(f"🚀 Searcade Playwright 登录脚本 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
     
@@ -222,12 +262,18 @@ async def main():
     
     if not accounts:
         print("❌ 未找到任何账号")
+        send_telegram_notification(
+            "Searcade 保号登录",
+            "❌ 未找到任何账号配置",
+            0, 0
+        )
         return
     
     print(f"📊 共找到 {len(accounts)} 个账号\n")
     
     success_count = 0
     fail_count = 0
+    results = []
     
     for i, account in enumerate(accounts, 1):
         username = account.get("username")
@@ -236,12 +282,15 @@ async def main():
         if not username or not password:
             print(f"⚠️  账号 {i} 信息不完整")
             fail_count += 1
+            results.append(f"❌ 账号 {i}: 信息不完整")
             continue
         
         if await login_with_playwright(username, password):
             success_count += 1
+            results.append(f"✅ {username}: 登录成功")
         else:
             fail_count += 1
+            results.append(f"❌ {username}: 登录失败")
         
         if i < len(accounts):
             await asyncio.sleep(2)
@@ -250,6 +299,15 @@ async def main():
     print(f"📈 成功: {success_count}, 失败: {fail_count}")
     print(f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*50}")
+    
+    # 发送 Telegram 通知
+    message = "\n".join(results)
+    send_telegram_notification(
+        "🔐 Searcade 保号登录结果",
+        message,
+        success_count,
+        fail_count
+    )
     
     if fail_count > 0 and success_count == 0:
         exit(1)
