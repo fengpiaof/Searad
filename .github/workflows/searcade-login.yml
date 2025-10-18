@@ -27,7 +27,7 @@ jobs:
       - name: 运行登录脚本
         env:
           SEARCADE_ACCOUNTS: ${{ secrets.SEARCADE_ACCOUNTS }}
-        run: python login.py
+        run: python login_api.py
       
       - name: 失败通知（可选）
         if: failure()
