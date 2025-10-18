@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 from datetime import datetime
+import requests
 
 async def load_accounts():
     """从环境变量加载账号列表"""
@@ -149,12 +150,56 @@ async def login_with_playwright(username, password):
                 # 获取页面内容用于判断
                 content = await page.content()
                 
-                if "login" not in current_url.lower() or "dashboard" in content.lower() or "logout" in content.lower():
-                    print(f"✅ 账号 {username} 登录成功")
+                # 验证登录成功的多个指标
+                success_checks = []
+                
+                # 检查1：URL是否离开了登录页面
+                if "login" not in current_url.lower():
+                    print(f"  ✓ 检查1: URL 已离开登录页面")
+                    success_checks.append(True)
+                else:
+                    print(f"  ✗ 检查1: 仍在登录页面")
+                    success_checks.append(False)
+                
+                # 检查2：页面是否包含 logout/profile/admin 等登录后才有的内容
+                logout_keywords = ["logout", "profile", "admin", "dashboard", "account", "settings"]
+                has_logout = any(keyword in content.lower() for keyword in logout_keywords)
+                if has_logout:
+                    print(f"  ✓ 检查2: 页面包含登录后的内容")
+                    success_checks.append(True)
+                else:
+                    print(f"  ✗ 检查2: 未发现登录后的内容")
+                    success_checks.append(False)
+                
+                # 检查3：检查页面是否包含错误信息
+                error_keywords = ["invalid", "incorrect", "error", "failed", "unauthorized", "403", "404"]
+                has_error = any(keyword in content.lower() for keyword in error_keywords)
+                if has_error:
+                    print(f"  ✗ 检查3: 页面包含错误信息")
+                    success_checks.append(False)
+                else:
+                    print(f"  ✓ 检查3: 页面无错误信息")
+                    success_checks.append(True)
+                
+                # 检查4：保存页面截图用于调试
+                screenshot_path = f"login_screenshot_{username}.png"
+                await page.screenshot(path=screenshot_path)
+                print(f"  📸 已保存截图: {screenshot_path}")
+                
+                # 检查5：打印页面标题
+                page_title = await page.title()
+                print(f"  📄 页面标题: {page_title}")
+                
+                if all(success_checks):
+                    print(f"✅ 账号 {username} 登录成功（通过所有验证）")
+                    await browser.close()
+                    return True
+                elif any(success_checks):
+                    print(f"⚠️  账号 {username} 可能登录成功（通过部分验证）")
                     await browser.close()
                     return True
                 else:
-                    print(f"❌ 账号 {username} 登录失败")
+                    print(f"❌ 账号 {username} 登录失败（未通过验证）")
                     await browser.close()
                     return False
                 
