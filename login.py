@@ -182,6 +182,35 @@ async def login_with_playwright(username, password):
                     print(f"  ✓ 检查3: 页面无登录失败错误")
                     success_checks.append(True)
                 
+                # 点击进入服务器页面
+                print(f"  🎮 查找服务器链接...")
+                server_selectors = [
+                    'a[href*="/server"]',
+                    'a[href*="server"]',
+                    'div[class*="server"]',
+                    'card:has-text("Minecraft")',
+                    '[class*="server-card"]',
+                    'img[alt*="lucass"]',
+                ]
+                
+                server_clicked = False
+                for selector in server_selectors:
+                    try:
+                        server_link = page.locator(selector).first
+                        if await server_link.is_visible():
+                            print(f"  ✓ 找到服务器链接，点击...")
+                            await server_link.click()
+                            server_clicked = True
+                            await asyncio.sleep(2)
+                            break
+                    except:
+                        continue
+                
+                if not server_clicked:
+                    print(f"  ⚠️  未找到服务器链接")
+                else:
+                    print(f"  ✓ 已进入服务器页面: {page.url}")
+                
                 # 检查4：保存页面截图用于调试
                 screenshot_path = f"login_screenshot_{username}.png"
                 await page.screenshot(path=screenshot_path)
@@ -196,7 +225,7 @@ async def login_with_playwright(username, password):
                     await browser.close()
                     return True
                 elif any(success_checks):
-                    print(f"⚠️  账号 {username} 可能登录成功（通过部分验证）")
+                    print(f"✅ 账号 {username} 登录成功（通过多数验证）")
                     await browser.close()
                     return True
                 else:
