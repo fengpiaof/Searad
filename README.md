@@ -9,6 +9,7 @@ Searcade 自动保号脚本
 必需配置：
 
 SEARCADE_ACCOUNTS - 账号信息（JSON格式）
+
 可选配置：
 
 TELEGRAM_BOT_TOKEN - Telegram Bot Token
