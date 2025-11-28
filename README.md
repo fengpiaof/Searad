@@ -14,6 +14,7 @@ SEARCADE_ACCOUNTS - 账号信息（JSON格式）
 
 TELEGRAM_BOT_TOKEN - Telegram Bot Token
 TELEGRAM_CHAT_ID - Telegram Chat ID
+
 SEARCADE_ACCOUNTS 格式示例：
 
 单个账号：
