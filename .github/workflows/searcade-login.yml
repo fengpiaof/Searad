@@ -2,38 +2,70 @@ name: Searcade 保号登录
 
 on:
   schedule:
-    # 每隔7天运行一次，UTC 时间 00:00
-    - cron: '6 6 */3 * *'
-  workflow_dispatch:  # 允许手动触发
+    - cron: '6 6 */3 * *'  # 每3天一次 UTC 06:06
+  workflow_dispatch:
 
 jobs:
   login:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: 签出代码
         uses: actions/checkout@v4
-      
+
       - name: 设置 Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      
+
       - name: 安装依赖
         run: |
           python -m pip install --upgrade pip
           pip install playwright requests
-          playwright install chromium
-      
+          playwright install --with-deps chromium  # 加 --with-deps 确保系统依赖
+
       - name: 运行登录脚本
         env:
           SEARCADE_ACCOUNTS: ${{ secrets.SEARCADE_ACCOUNTS }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python login.py
-      
-      - name: 失败通知（可选）
-        if: failure()
+
+      # ------------------ 新增：上传所有截图作为 artifact ------------------
+      - name: 上传截图 artifact
+        if: always()  # 无论成功失败都上传
+        uses: actions/upload-artifact@v4
+        with:
+          name: login-screenshots
+          path: ./*.png   # 假设截图保存在当前目录，改成你的实际路径如 screenshots/*.png
+          retention-days: 7
+
+      # ------------------ 新增：发送截图到 Telegram ------------------
+      - name: 发送截图到 Telegram
+        if: always()  # 总是执行（成功/失败都发）
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          echo "❌ 登录脚本执行失败"
-          echo "请检查账号信息或网站状态"
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "缺少 Telegram 配置，跳过发送"
+            exit 0
+          fi
+
+          # 查找所有 png 文件
+          for screenshot in *.png; do
+            if [ -f "$screenshot" ]; then
+              echo "发送截图: $screenshot"
+              curl -F chat_id="$TELEGRAM_CHAT_ID" \
+                   -F caption="Searcade 保号登录 - $(date '+%Y-%m-%d %H:%M:%S') UTC | 状态: ${{ job.status }}" \
+                   -F document=@"$screenshot" \
+                   https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendDocument
+            fi
+          done
+
+          # 如果没有截图，也发一条文字通知
+          if ! ls *.png >/dev/null 2>&1; then
+            curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+                 -d chat_id="$TELEGRAM_CHAT_ID" \
+                 -d text="Searcade 保号登录完成 | 状态: ${{ job.status }} | 无截图生成"
+          fi
