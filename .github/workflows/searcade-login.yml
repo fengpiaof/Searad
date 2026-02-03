@@ -2,8 +2,8 @@ name: Searcade 保号登录
 
 on:
   schedule:
-    - cron: '6 6 */3 * *'    # 每3天运行一次，UTC 06:06
-  workflow_dispatch:
+    - cron: '6 6 */3 * *'    # 每3天运行一次
+  workflow_dispatch:         # 支持手动触发
 
 jobs:
   login:
@@ -19,18 +19,23 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
+      # 新增：恢复登录状态缓存，避免频繁触发 CF 验证
+      - name: 恢复 Session 缓存
+        uses: actions/cache@v3
+        with:
+          path: searcade_auth_state.json
+          key: searcade-auth-${{ github.run_id }}
+          restore-keys: |
+            searcade-auth-
+
       - name: 安装依赖
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-          pip install playwright requests playwright-stealth==1.0.6
-          playwright install --with-deps chromium
-          pip show playwright-stealth   # 调试用
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install playwright requests playwright-stealth==1.0.6; fi
+          npx playwright install chromium --with-deps
 
       - name: 创建截图目录
-        run: |
-          mkdir -p screenshots
-          echo "当前目录结构："
-          ls -la
+        run: mkdir -p screenshots
 
       - name: 运行登录脚本
         env:
@@ -45,44 +50,27 @@ jobs:
         with:
           name: searcade-login-screenshots
           path: screenshots/*.png
-          if-no-files-found: warn
-          retention-days: 14
+          retention-days: 7
 
-      - name: 发送截图到 Telegram（使用 sendPhoto）
+      - name: 发送截图到 Telegram
         if: always()
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-            echo "缺少 Telegram 配置，跳过"
-            exit 0
-          fi
-
-          echo "查找截图..."
-          ls -la screenshots/ || true
-
-          found=false
-          for file in screenshots/*.png; do
-            if [ -f "$file" ]; then
-              found=true
+          # 检查是否有 png 文件
+          if ls screenshots/*.png 1> /dev/null 2>&1; then
+            for file in screenshots/*.png; do
               filename=$(basename "$file")
-              echo "发送: $filename"
               curl -s -F chat_id="$TELEGRAM_CHAT_ID" \
-                   -F caption="Searcade 保号 | $(date '+%Y-%m-%d %H:%M:%S') UTC | 状态: ${{ job.status }} | $filename" \
+                   -F caption="Searcade 运行记录 | $filename" \
                    -F photo=@"$file" \
                    https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendPhoto
-              sleep 2
-            fi
-          done
-
-          if [ "$found" = false ]; then
+              sleep 1
+            done
+          else
+            echo "没有发现截图，发送纯文本通知"
             curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
                  -d chat_id="$TELEGRAM_CHAT_ID" \
-                 -d parse_mode="HTML" \
-                 -d text="<b>Searcade 保号登录完成</b>\n状态: ${{ job.status }}\n时间: $(date '+%Y-%m-%d %H:%M:%S') UTC\n无截图"
+                 -d text="Searcade 保号任务已执行，未产生新截图 (状态: ${{ job.status }})"
           fi
-
-      - name: 清理临时文件（可选）
-        if: always()
-        run: echo "清理完成"
