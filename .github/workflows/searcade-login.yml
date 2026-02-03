@@ -3,7 +3,7 @@ name: Searcade 保号登录
 on:
   schedule:
     - cron: '6 6 */3 * *'    # 每3天运行一次，UTC 06:06
-  workflow_dispatch:         # 支持手动触发
+  workflow_dispatch:
 
 jobs:
   login:
@@ -22,10 +22,9 @@ jobs:
       - name: 安装依赖
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          pip install playwright requests playwright-stealth==1.0.6   # 固定旧版，兼容 stealth_async
+          pip install playwright requests playwright-stealth==1.0.6
           playwright install --with-deps chromium
-          # 调试：打印版本确认
-          pip show playwright-stealth
+          pip show playwright-stealth   # 调试用
 
       - name: 创建截图目录
         run: |
@@ -56,11 +55,11 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-            echo "缺少 Telegram Bot Token 或 Chat ID，跳过发送"
+            echo "缺少 Telegram 配置，跳过"
             exit 0
           fi
 
-          echo "查找截图文件..."
+          echo "查找截图..."
           ls -la screenshots/ || true
 
           found=false
@@ -68,24 +67,22 @@ jobs:
             if [ -f "$file" ]; then
               found=true
               filename=$(basename "$file")
-              echo "正在发送: $filename"
+              echo "发送: $filename"
               curl -s -F chat_id="$TELEGRAM_CHAT_ID" \
-                   -F caption="Searcade 保号登录截图 | $(date '+%Y-%m-%d %H:%M:%S') UTC | 作业状态: ${{ job.status }} | 文件: $filename" \
+                   -F caption="Searcade 保号 | $(date '+%Y-%m-%d %H:%M:%S') UTC | 状态: ${{ job.status }} | $filename" \
                    -F photo=@"$file" \
                    https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendPhoto
-              sleep 2  # 避免 Telegram flood limit
+              sleep 2
             fi
           done
 
           if [ "$found" = false ]; then
-            echo "没有找到任何截图，发送文字通知"
             curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
                  -d chat_id="$TELEGRAM_CHAT_ID" \
                  -d parse_mode="HTML" \
-                 -d text="<b>Searcade 保号登录完成</b>\n状态: ${{ job.status }}\n时间: $(date '+%Y-%m-%d %H:%M:%S') UTC\n\n无截图生成（可能脚本未执行到截图步骤或全部失败）"
+                 -d text="<b>Searcade 保号登录完成</b>\n状态: ${{ job.status }}\n时间: $(date '+%Y-%m-%d %H:%M:%S') UTC\n无截图"
           fi
 
       - name: 清理临时文件（可选）
         if: always()
-        run: |
-          echo "清理完成，无需额外操作"
+        run: echo "清理完成"
