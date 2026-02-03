@@ -22,8 +22,10 @@ jobs:
       - name: 安装依赖
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          pip install playwright requests playwright-stealth
+          pip install playwright requests playwright-stealth==1.0.6   # 固定旧版，兼容 stealth_async
           playwright install --with-deps chromium
+          # 调试：打印版本确认
+          pip show playwright-stealth
 
       - name: 创建截图目录
         run: |
