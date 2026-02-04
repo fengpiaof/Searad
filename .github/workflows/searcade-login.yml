@@ -13,6 +13,14 @@ jobs:
       - name: 签出代码
         uses: actions/checkout@v4
       
+      - name: Cache auth state
+        uses: actions/cache@v4
+        id: cache-auth
+        with:
+          path: searcade_auth_state.json
+          key: auth-state-\( {{ runner.os }}- \){{ hashFiles('login.py') }}
+          restore-keys: auth-state-${{ runner.os }}-
+      
       - name: 设置 Python
         uses: actions/setup-python@v5
         with:
