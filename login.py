@@ -5,7 +5,7 @@ import random
 from datetime import datetime
 from pathlib import Path
 import requests
-from playwright.async_api import async_playwright, PlaywrightTimeoutError
+from playwright.async_api import async_playwright, TimeoutError
 from playwright_stealth import stealth_async
 
 # 截图保存目录
